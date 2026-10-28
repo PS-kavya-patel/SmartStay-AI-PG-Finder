@@ -1,0 +1,86 @@
+{
+  "Ahmedabad": {
+    "Navrangpura": [
+      {
+        "name": "LD College of Engineering, Navrangpura",
+        "type": "college",
+        "lat": 23.0338,
+        "lon": 72.5463
+      },
+      {
+        "name": "Gujarat University, Navrangpura",
+        "type": "college",
+        "lat": 23.0375,
+        "lon": 72.5458
+      },
+      {
+        "name": "CEPT University, Navrangpura",
+        "type": "college",
+        "lat": 23.0380,
+        "lon": 72.5480
+      },
+      {
+        "name": "St. Xavier's College, Navrangpura",
+        "type": "college",
+        "lat": 23.0322,
+        "lon": 72.5567
+      }
+    ],
+    "Vastrapur": [
+      {
+        "name": "IIM Ahmedabad (IIM-A), Vastrapur",
+        "type": "college",
+        "lat": 23.0315,
+        "lon": 72.5312
+      },
+      {
+        "name": "Ahmedabad Management Association (AMA), Vastrapur",
+        "type": "office",
+        "lat": 23.0305,
+        "lon": 72.5348
+      }
+    ],
+    "Paldi": [
+      {
+        "name": "National Institute of Design (NID), Paldi",
+        "type": "college",
+        "lat": 23.0122,
+        "lon": 72.5683
+      },
+      {
+        "name": "Gujarat Chamber of Commerce & Industry (GCCI), Paldi",
+        "type": "office",
+        "lat": 23.0135,
+        "lon": 72.5702
+      }
+    ],
+    "Bodakdev": [
+      {
+        "name": "Pinnacle Business Park, Bodakdev",
+        "type": "office",
+        "lat": 23.0425,
+        "lon": 72.5110
+      },
+      {
+        "name": "Judges Bungalow Commercial Hub, Bodakdev",
+        "type": "office",
+        "lat": 23.0410,
+        "lon": 72.5135
+      }
+    ],
+    "Satellite": [
+      {
+        "name": "Space Applications Centre (ISRO), Satellite",
+        "type": "office",
+        "lat": 23.0232,
+        "lon": 72.5186
+      },
+      {
+        "name": "Shivranjani Crossroads Business Hub, Satellite",
+        "type": "office",
+        "lat": 23.0265,
+        "lon": 72.5255
+      }
+    ]
+  }
+}

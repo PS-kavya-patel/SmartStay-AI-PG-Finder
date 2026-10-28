@@ -116,14 +116,32 @@ class ReflectionAgent:
     ) -> ReflectionResult:
         """Deterministic fallback correction when LLM reflection is unavailable."""
         from database.data_service import data_service
+        from tools.amenity_checker import normalize_amenity
 
         valid_pgs = []
         for pid in recommended_pg_ids:
             pg = data_service.get_pg_by_id(pid)
             if not pg:
                 continue
+            if criteria.area and criteria.area.strip().lower() not in ["all areas", "all", ""]:
+                if pg.area.strip().lower() != criteria.area.strip().lower():
+                    continue
             if criteria.max_rent and pg.monthly_rent > criteria.max_rent:
                 continue
+            if criteria.gender:
+                cg = criteria.gender.strip().lower()
+                if "girl" in cg or "female" in cg:
+                    if pg.gender not in ["girls", "co-ed"]:
+                        continue
+                elif "boy" in cg or "male" in cg:
+                    if pg.gender not in ["boys", "co-ed"]:
+                        continue
+                elif "co" in cg and pg.gender != "co-ed":
+                    continue
+            if criteria.required_amenities:
+                pg_norm = [normalize_amenity(a) for a in pg.amenities]
+                if any(normalize_amenity(req) not in pg_norm for req in criteria.required_amenities):
+                    continue
             valid_pgs.append(pg)
 
         if valid_pgs:

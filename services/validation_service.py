@@ -38,7 +38,18 @@ class ValidationService:
 
             verified.append(f"PG '{pg.name}' ({pg.id}) verified in database.")
 
-            # 2. Budget Verification
+            # 2. Neighborhood / Area Verification
+            if criteria.area and criteria.area.strip().lower() not in ["all areas", "all", ""]:
+                clean_target_area = criteria.area.strip().lower()
+                if clean_target_area != pg.area.strip().lower():
+                    errors.append(
+                        f"Neighborhood violation: '{pg.name}' is in '{pg.area}', "
+                        f"but user requested '{criteria.area}'."
+                    )
+                else:
+                    verified.append(f"'{pg.name}' neighborhood '{pg.area}' matches requested '{criteria.area}'.")
+
+            # 3. Budget Verification
             if criteria.max_rent is not None and criteria.max_rent > 0:
                 if pg.monthly_rent > criteria.max_rent:
                     errors.append(

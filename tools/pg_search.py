@@ -39,9 +39,10 @@ def search_pgs(
         if clean_city and clean_city not in pg.city.lower():
             continue
 
-        # Check area
-        if clean_area and clean_area not in pg.area.lower():
-            continue
+        # Check area (strict neighborhood matching)
+        if clean_area and clean_area not in ["all areas", "all", ""]:
+            if clean_area != pg.area.strip().lower():
+                continue
 
         # Check gender restriction
         if target_gender:

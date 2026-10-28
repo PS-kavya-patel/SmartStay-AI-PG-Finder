@@ -25,7 +25,7 @@ from agents.reflection_agent import ReflectionAgent
 # Direct tool imports for seamless tool dispatch
 from tools.pg_search import search_pgs as _tool_search_pgs, get_pg_details as _tool_get_pg_details
 from tools.budget_filter import filter_by_budget as _tool_filter_budget
-from tools.amenity_checker import check_amenities as _tool_check_amenities
+from tools.amenity_checker import check_amenities as _tool_check_amenities, normalize_amenity
 from tools.distance_calculator import calculate_distance as _tool_calc_dist
 from tools.pg_comparator import compare_pgs as _tool_compare_pgs
 from tools.pg_ranker import rank_pgs as _tool_rank_pgs
@@ -194,17 +194,53 @@ class SmartStayAgent:
             req_amenities.append("Gym")
         criteria.required_amenities = req_amenities
 
+        # Neighborhood / Area extraction
+        for area_candidate in ["Navrangpura", "Vastrapur", "Bodakdev", "Satellite", "Paldi"]:
+            if area_candidate.lower() in q:
+                criteria.area = area_candidate
+                break
+
         # Destination extraction
-        if "college" in q or "ld college" in q:
-            criteria.destination_name = "LD College of Engineering, Ahmedabad"
-        elif "university" in q or "gujarat university" in q:
-            criteria.destination_name = "Gujarat University, Ahmedabad"
-        elif "iim" in q:
-            criteria.destination_name = "IIM Ahmedabad"
+        dest_mappings = [
+            ("national institute of design", "National Institute of Design (NID), Paldi"),
+            ("nid", "National Institute of Design (NID), Paldi"),
+            ("gujarat chamber of commerce", "Gujarat Chamber of Commerce & Industry (GCCI), Paldi"),
+            ("gcci", "Gujarat Chamber of Commerce & Industry (GCCI), Paldi"),
+            ("ld college of engineering", "LD College of Engineering, Navrangpura"),
+            ("ld college", "LD College of Engineering, Navrangpura"),
+            ("gujarat university", "Gujarat University, Navrangpura"),
+            ("cept university", "CEPT University, Navrangpura"),
+            ("cept", "CEPT University, Navrangpura"),
+            ("st. xavier", "St. Xavier's College, Navrangpura"),
+            ("xavier", "St. Xavier's College, Navrangpura"),
+            ("iim ahmedabad", "IIM Ahmedabad (IIM-A), Vastrapur"),
+            ("iima", "IIM Ahmedabad (IIM-A), Vastrapur"),
+            ("iim", "IIM Ahmedabad (IIM-A), Vastrapur"),
+            ("ahmedabad management association", "Ahmedabad Management Association (AMA), Vastrapur"),
+            ("ama", "Ahmedabad Management Association (AMA), Vastrapur"),
+            ("pinnacle business park", "Pinnacle Business Park, Bodakdev"),
+            ("pinnacle", "Pinnacle Business Park, Bodakdev"),
+            ("judges bungalow", "Judges Bungalow Commercial Hub, Bodakdev"),
+            ("space applications centre", "Space Applications Centre (ISRO), Satellite"),
+            ("isro", "Space Applications Centre (ISRO), Satellite"),
+            ("shivranjani", "Shivranjani Crossroads Business Hub, Satellite"),
+            ("nirma university", "Nirma University, SG Highway, Ahmedabad"),
+            ("nirma", "Nirma University, SG Highway, Ahmedabad")
+        ]
+        for key, dest_full in dest_mappings:
+            if key in q:
+                criteria.destination_name = dest_full
+                break
+
+        if not criteria.destination_name:
+            if "college" in q:
+                criteria.destination_name = "LD College of Engineering, Navrangpura"
+            elif "university" in q:
+                criteria.destination_name = "Gujarat University, Navrangpura"
 
         return criteria
 
-    def run(self, user_query: str) -> Dict[str, Any]:
+    def run(self, user_query: str, criteria: Optional[PGSearchCriteria] = None, *args, **kwargs) -> Dict[str, Any]:
         """
         Executes the full ReAct agentic loop:
         1. Dynamic Tool Discovery
@@ -213,7 +249,26 @@ class SmartStayAgent:
         4. Deterministic Validation
         5. One-Shot Reflection & Evidence Auditing
         """
-        criteria = self.extract_criteria_from_query(user_query)
+        extracted = self.extract_criteria_from_query(user_query)
+        if criteria is None:
+            criteria = extracted
+        else:
+            # Merge explicit criteria with extracted fields where explicit is unset
+            if not criteria.city:
+                criteria.city = extracted.city
+            if not criteria.area and extracted.area:
+                criteria.area = extracted.area
+            if not criteria.gender and extracted.gender:
+                criteria.gender = extracted.gender
+            if not criteria.max_rent and extracted.max_rent:
+                criteria.max_rent = extracted.max_rent
+            if not criteria.max_distance_km and extracted.max_distance_km:
+                criteria.max_distance_km = extracted.max_distance_km
+            if not criteria.required_amenities and extracted.required_amenities:
+                criteria.required_amenities = extracted.required_amenities
+            if not criteria.destination_name and extracted.destination_name:
+                criteria.destination_name = extracted.destination_name
+
         tool_catalog = self.discover_tools()
         conversation_history: List[Dict[str, str]] = [
             {"role": "system", "content": self.system_prompt},
@@ -349,6 +404,62 @@ class SmartStayAgent:
             target_pg_ids = final_target_ids
         else:
             final_response_text = final_answer_draft
+
+        # Strict post-processing: guarantee only PGs satisfying 100% of criteria are returned
+        strictly_valid_ids = []
+        for pid in target_pg_ids:
+            p = data_service.get_pg_by_id(pid)
+            if not p:
+                continue
+            # Neighborhood / Area filter (Strict)
+            if criteria.area and criteria.area.strip().lower() not in ["all areas", "all", ""]:
+                if p.area.strip().lower() != criteria.area.strip().lower():
+                    continue
+            # City filter
+            if criteria.city and criteria.city.strip().lower() not in p.city.strip().lower():
+                continue
+            # Budget filter
+            if criteria.max_rent is not None and criteria.max_rent > 0:
+                if p.monthly_rent > criteria.max_rent:
+                    continue
+            # Gender filter
+            if criteria.gender:
+                cg = criteria.gender.strip().lower()
+                if "girl" in cg or "female" in cg:
+                    if p.gender not in ["girls", "co-ed"]:
+                        continue
+                elif "boy" in cg or "male" in cg:
+                    if p.gender not in ["boys", "co-ed"]:
+                        continue
+                elif "co" in cg and p.gender != "co-ed":
+                    continue
+            # Mandatory Amenities filter
+            if criteria.required_amenities:
+                p_norm = [normalize_amenity(a) for a in p.amenities]
+                if any(normalize_amenity(req) not in p_norm for req in criteria.required_amenities):
+                    continue
+            # Distance filter
+            if criteria.max_distance_km is not None and criteria.max_distance_km > 0:
+                pg_dist = distance_data.get(pid)
+                if pg_dist is not None and pg_dist > criteria.max_distance_km:
+                    continue
+
+            strictly_valid_ids.append(pid)
+
+        target_pg_ids = strictly_valid_ids
+
+        # If zero PGs passed all filters, output clear helpful message
+        if not target_pg_ids:
+            final_response_text = (
+                "No PG accommodations found matching your selected criteria. None of the listings satisfied all specified constraints. "
+                "Consider expanding your neighborhood search or adjusting budget/distance constraints."
+            )
+            validation_result = ValidationResult(
+                is_valid=True,
+                errors=[],
+                warnings=["No PG listings matched all specified criteria."],
+                verified_items=[]
+            )
 
         # Gather final PG objects
         recommended_pg_objects = []
