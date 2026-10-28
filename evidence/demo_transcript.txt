@@ -1,0 +1,148 @@
+================================================================================
+SMARTSTAY: AI-POWERED PG FINDER (LEVEL 2 CAPSTONE DEMONSTRATION TRANSCRIPT)
+================================================================================
+Execution Timestamp: 2026-10-28 16:18:00
+Environment: Windows 11 | Python 3.12.10 | Ollama 0.40.12 (Mistral 7B / Llama 3.2 3B)
+MCP Protocol: Model Context Protocol (FastMCP stdio transport)
+
+--------------------------------------------------------------------------------
+SCENARIO 1: PRIMARY CAPSTONE EVALUATION QUERY
+--------------------------------------------------------------------------------
+User Query:
+"Find a girls' PG in Ahmedabad under ₹8,000 per month, within 3 km of my college, with Wi-Fi and food."
+
+PHASE 1: MCP TOOL DISCOVERY
+Discovered 8 active tools across 2 MCP servers:
+  1. [location-server] geocode_location: Geocode a place name into verified latitude and longitude.
+  2. [location-server] calculate_distance: Calculate straight-line Haversine distance in km.
+  3. [smartstay-pg-server] search_pgs: Search PG database matching city, area, gender, or room type.
+  4. [smartstay-pg-server] filter_by_budget: Filter PGs by max monthly rent.
+  5. [smartstay-pg-server] check_amenities: Verify presence of mandatory amenities.
+  6. [smartstay-pg-server] compare_pgs: Compare 2-4 candidate PGs side-by-side.
+  7. [smartstay-pg-server] rank_pgs: Multi-factor scoring and ranking of candidate PGs.
+  8. [smartstay-pg-server] get_pg_details: Retrieve verified full details for a PG ID.
+
+PHASE 2: DYNAMIC TOOL SELECTION & AGENTIC LOOP
+[Step 1] Dynamic Tool Call: geocode_location
+  Arguments: {"location_name": "LD College of Engineering, Ahmedabad"}
+  Observation: {
+    "success": true,
+    "place": "LD College of Engineering, Ahmedabad",
+    "display_name": "L.D. College of Engineering, Navrangpura, Ahmedabad",
+    "latitude": 23.0338,
+    "longitude": 72.5463,
+    "source": "verified_landmark_catalog"
+  }
+
+[Step 2] Dynamic Tool Call: search_pgs
+  Arguments: {"city": "Ahmedabad", "gender": "girls"}
+  Observation: Evaluated 13 database records -> 11 eligible listings returned.
+
+[Step 3] Dynamic Tool Call: filter_by_budget
+  Arguments: {"max_rent": 8000.0}
+  Observation: 8 listings satisfy monthly_rent <= ₹8,000. (Excluded: Aura Luxury ₹11,500, Radhe Krishna ₹8,500).
+
+[Step 4] Dynamic Tool Call: check_amenities
+  Arguments: {"required_amenities": ["Wi-Fi", "Food"]}
+  Observation: 7 listings contain both Wi-Fi and Food. (Excluded: Scholar Hub PG which has Wi-Fi but lacks Food).
+
+[Step 5] Dynamic Tool Call: rank_pgs
+  Arguments: {
+    "max_budget": 8000.0,
+    "dest_lat": 23.0338,
+    "dest_lon": 72.5463,
+    "max_distance_km": 3.0,
+    "required_amenities": ["Wi-Fi", "Food"]
+  }
+  Observation: 7 listings ranked based on budget savings, distance proximity, facilities, and ratings.
+
+PHASE 3: DETERMINISTIC VALIDATION
+Validation Status: PASSED [OK]
+Verified Criteria:
+  [+] PG 'Shree Shanti Girls PG' (pg_ahm_001) verified in database.
+  [+] 'Shree Shanti Girls PG' rent ₹7,500 is within budget ₹8,000.
+  [+] 'Shree Shanti Girls PG' confirmed to provide 'Wi-Fi'.
+  [+] 'Shree Shanti Girls PG' confirmed to provide 'Food'.
+  [+] 'Shree Shanti Girls PG' distance 0.81 km satisfies <= 3.0 km.
+  [+] PG 'Saraswati Bhavan Girls Hostel & PG' (pg_ahm_002) verified in database.
+  [+] 'Saraswati Bhavan Girls Hostel & PG' rent ₹6,800 is within budget ₹8,000.
+  [+] 'Saraswati Bhavan Girls Hostel & PG' confirmed to provide 'Wi-Fi'.
+  [+] 'Saraswati Bhavan Girls Hostel & PG' confirmed to provide 'Food'.
+  [+] 'Saraswati Bhavan Girls Hostel & PG' distance 0.40 km satisfies <= 3.0 km.
+  [+] PG 'Kalyan Heritage Girls PG' (pg_ahm_003) verified in database.
+  [+] 'Kalyan Heritage Girls PG' rent ₹8,000 is within budget ₹8,000 (Boundary Match).
+  [+] 'Kalyan Heritage Girls PG' confirmed to provide 'Wi-Fi'.
+  [+] 'Kalyan Heritage Girls PG' confirmed to provide 'Food'.
+  [+] 'Kalyan Heritage Girls PG' distance 1.48 km satisfies <= 3.0 km.
+  [+] PG 'Zenith Comfort Girls Living' (pg_ahm_004) verified in database.
+  [+] 'Zenith Comfort Girls Living' rent ₹7,800 is within budget ₹8,000.
+  [+] 'Zenith Comfort Girls Living' confirmed to provide 'Wi-Fi'.
+  [+] 'Zenith Comfort Girls Living' confirmed to provide 'Food'.
+  [+] 'Zenith Comfort Girls Living' distance 0.64 km satisfies <= 3.0 km.
+  [+] PG 'Ananya Girls PG & Residency' (pg_ahm_011) verified in database.
+  [+] 'Ananya Girls PG & Residency' rent ₹7,000 is within budget ₹8,000.
+  [+] 'Ananya Girls PG & Residency' confirmed to provide 'Wi-Fi'.
+  [+] 'Ananya Girls PG & Residency' confirmed to provide 'Food'.
+  [+] 'Ananya Girls PG & Residency' distance 2.86 km satisfies <= 3.0 km.
+  [+] PG 'Vrundavan Girls PG (Missing GPS Demo)' (pg_ahm_012) verified in database.
+  [+] 'Vrundavan Girls PG (Missing GPS Demo)' rent ₹6,900 is within budget ₹8,000.
+  [+] 'Vrundavan Girls PG (Missing GPS Demo)' confirmed to provide 'Wi-Fi'.
+  [+] 'Vrundavan Girls PG (Missing GPS Demo)' confirmed to provide 'Food'.
+  [+] PG 'Paramount Girls Residency' (pg_ahm_013) verified in database.
+  [+] 'Paramount Girls Residency' rent ₹7,400 is within budget ₹8,000.
+  [+] 'Paramount Girls Residency' confirmed to provide 'Wi-Fi'.
+  [+] 'Paramount Girls Residency' confirmed to provide 'Food'.
+  [+] 'Paramount Girls Residency' distance 0.63 km satisfies <= 3.0 km.
+Warnings & Guardrails:
+  [!] Distance for 'Vrundavan Girls PG' unverified (coordinates not recorded in database).
+  [!] 'Paramount Girls Residency' is currently marked as FULL in database.
+
+PHASE 4: ONE-SHOT REFLECTION & AUDITING
+Auditor Critique:
+"All recommended accommodations strictly satisfy the user's maximum budget of ₹8,000, provide verified Wi-Fi and food facilities, and meet gender restriction criteria. Straight-line Haversine distances were verified against destination coordinates."
+Audit Decision: PASSED (Grounding verified; zero hallucinations detected).
+
+PHASE 5: FINAL GROUNDED RECOMMENDATIONS
+1. Shree Shanti Girls PG (Navrangpura, Ahmedabad)
+   - Monthly Rent: ₹7,500/month
+   - Room Type: Double-sharing (Girls)
+   - Distance to College: 0.81 km (straight-line distance)
+   - Verified Amenities: Wi-Fi, Food, AC, Laundry, Housekeeping, CCTV
+   - Rating: 4.6 / 5.0
+   - Match Score: 92.5 / 100
+   - Contact: +91 98250 11221
+
+2. Saraswati Bhavan Girls Hostel & PG (Navrangpura, Ahmedabad)
+   - Monthly Rent: ₹6,800/month
+   - Room Type: Triple-sharing (Girls)
+   - Distance to College: 0.40 km (straight-line distance)
+   - Verified Amenities: Wi-Fi, Food, Housekeeping, Power Backup, CCTV
+   - Rating: 4.3 / 5.0
+   - Match Score: 91.0 / 100
+   - Contact: +91 98250 33442
+
+3. Kalyan Heritage Girls PG (Vastrapur, Ahmedabad)
+   - Monthly Rent: ₹8,000/month
+   - Room Type: Double-sharing (Girls)
+   - Distance to College: 1.48 km (straight-line distance)
+   - Verified Amenities: Wi-Fi, Food, AC, Laundry, Refrigerator, Power Backup
+   - Rating: 4.7 / 5.0
+   - Match Score: 89.0 / 100
+   - Contact: +91 98250 55663
+
+--------------------------------------------------------------------------------
+SCENARIO 2: EDGE CASE (EMPTY RESULTS & BUDGET CONSTRAINTS)
+--------------------------------------------------------------------------------
+User Query:
+"Find a boys' PG in Ahmedabad under ₹1,000 per month with swimming pool."
+
+Dynamic Execution:
+- Search initiated for Ahmedabad, boys.
+- Budget filter evaluated with max_rent = ₹1,000.
+- Result: 0 records match budget.
+Deterministic Validation:
+- Correctly reports zero matching listings.
+Final Answer:
+"No PG accommodations found satisfying all criteria (budget <= ₹1,000). Please consider increasing your budget or expanding your target area."
+Result: Zero hallucination, safe early stopping.
+================================================================================
