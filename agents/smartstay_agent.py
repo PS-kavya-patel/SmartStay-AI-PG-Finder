@@ -29,12 +29,8 @@ from tools.amenity_checker import check_amenities as _tool_check_amenities, norm
 from tools.distance_calculator import calculate_distance as _tool_calc_dist
 from tools.pg_comparator import compare_pgs as _tool_compare_pgs
 from tools.pg_ranker import rank_pgs as _tool_rank_pgs
-from mcp_servers.location_server import (
-    resolve_location_coordinates,
-    geocode_location as _tool_geocode,
-    get_distance_and_route_info as _tool_dist_route
-)
 from mcp_servers.location_client import location_client
+
 
 
 logger = logging.getLogger(__name__)

@@ -16,8 +16,8 @@ graph TD
     end
 
     subgraph Model Context Protocol (MCP) Multi-Server Layer
-        MCP_PG[Custom SmartStay MCP Server (mcp_servers/pg_server.py)]
-        MCP_LOC[Pre-Built Location MCP Server (mcp_servers/location_server.py)]
+        MCP_PG[Custom SmartStay PG MCP Server (mcp_servers/pg_server.py)]
+        MCP_LOC[Pre-Built OpenStreetMap Location MCP Server (npx -y osm-mcp)]
     end
 
     subgraph Data & Business Logic
@@ -54,8 +54,8 @@ graph TD
 | :--- | :--- | :--- |
 | **SmartStay Agent** | `agents/smartstay_agent.py` | Orchestrates dynamic MCP tool discovery, execution loop, state tracking, and stopping criteria. |
 | **Custom PG Server** | `mcp_servers/pg_server.py` | Exposes PG business logic (`search_pgs`, `filter_by_budget`, `check_amenities`, `compare_pgs`, `rank_pgs`, `get_pg_details`) via FastMCP standard I/O transport. |
-| **Location Server** | `mcp_servers/location_server.py` | Handles geocoding, landmark resolution, and straight-line distance calculations via FastMCP. |
-| **Location Client** | `mcp_servers/location_client.py` | Python wrapper client providing fail-safe geocoding with offline landmark catalog fallback. |
+| **Pre-Built OSM Server**| `osm-mcp` (Node.js/npx) | OpenStreetMap Location MCP server providing real-world geocoding, route distances, travel durations, and straight-line distance. |
+| **Location Client** | `mcp_servers/location_client.py` | Official MCP Python Client SDK (`ClientSession` + `stdio_client`) connecting to pre-built `osm-mcp` with verified local catalog fallback. |
 | **Scoring Engine** | `services/scoring_service.py` | Computes transparent 0–100 match scores based on budget savings, proximity, amenities, and user ratings. |
 | **Validation Service** | `services/validation_service.py` | Deterministic verifier ensuring no budget overruns, gender restrictions match, mandatory facilities exist, and all recommended IDs exist in database. |
 | **Reflection Agent** | `agents/reflection_agent.py` | Performs one-shot auditing of proposed response against concrete tool evidence to catch and correct hallucinations. |
@@ -69,7 +69,7 @@ SmartStay splits responsibilities cleanly across **two independent MCP servers**
 
 ```
 MCP Client (SmartStay Agent)
-    ├── [Server 1: smartstay-pg-server (stdio)]
+    ├── [Server 1: smartstay-pg-server (stdio)] (Custom MCP)
     │      ├── search_pgs
     │      ├── filter_by_budget
     │      ├── check_amenities
@@ -77,10 +77,12 @@ MCP Client (SmartStay Agent)
     │      ├── rank_pgs
     │      └── get_pg_details
     │
-    └── [Server 2: location-server (stdio)]
-           ├── geocode_location
-           └── get_distance_and_route_info / calculate_distance
+    └── [Server 2: osm-location-server (stdio)] (Pre-Built OSM MCP)
+           ├── geocode
+           ├── straight_line_distance
+           └── route
 ```
+
 
 ### Transport & Protocol
 - **Transport**: Standard Input/Output (`stdio`) as demonstrated in Level 2 capstone specifications.

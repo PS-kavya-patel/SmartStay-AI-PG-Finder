@@ -1,89 +1,88 @@
 import json
 import logging
-import subprocess
+import shutil
 import re
-from typing import Optional, Dict, Any
-from mcp_servers.location_server import (
-    resolve_location_coordinates,
-    geocode_location as _srv_geocode,
-    get_distance_and_route_info as _srv_distance
-)
+import asyncio
+import concurrent.futures
+from typing import Optional, Dict, Any, List
+
+# Official Model Context Protocol (MCP) Python Client SDK
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+# Local fallback services
+from database.location_service import location_service
+from tools.distance_calculator import calculate_distance as _calc_dist
+
 
 logger = logging.getLogger(__name__)
 
-class OSMMCPClient:
+class LocationClient:
     """
-    Client for interacting with the pre-built OpenStreetMap MCP server (osm-mcp).
-    Uses stdio JSON-RPC 2.0 communication with automatic fallback to local landmark engine.
+    Official MCP Client interface for interacting with the pre-built OpenStreetMap MCP server (osm-mcp).
+    Communicates via official MCP Python SDK (stdio_client + ClientSession) with automatic fallback.
     """
 
-    def __init__(self, timeout: float = 5.0):
+    def __init__(self, timeout: float = 8.0):
         self.timeout = timeout
+        self._command = shutil.which("npx") or "npx"
 
-    def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Invokes a tool on the pre-built osm-mcp server via standard I/O."""
+    def _get_server_params(self) -> StdioServerParameters:
+        """Constructs StdioServerParameters for launching the pre-built osm-mcp server."""
+        return StdioServerParameters(
+            command=self._command,
+            args=["-y", "osm-mcp"],
+            env=None
+        )
+
+    async def list_tools_async(self) -> List[str]:
+        """Discovers tools exposed by the pre-built osm-mcp server using the official MCP SDK."""
+        server_params = self._get_server_params()
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools_result = await session.list_tools()
+                return [t.name for t in tools_result.tools]
+
+    def list_tools(self) -> List[str]:
+        """Synchronous wrapper for discovering tools via official MCP SDK."""
         try:
-            proc = subprocess.Popen(
-                ["npx", "-y", "osm-mcp"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                shell=True
-            )
-
-            # 1. MCP initialize handshake
-            init_payload = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "smartstay-agent", "version": "1.0.0"}
-                }
-            }
-            proc.stdin.write(json.dumps(init_payload) + "\n")
-            proc.stdin.flush()
-            proc.stdout.readline()
-
-            # 2. notifications/initialized
-            proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
-            proc.stdin.flush()
-
-            # 3. tools/call
-            call_payload = {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments}
-            }
-            proc.stdin.write(json.dumps(call_payload) + "\n")
-            proc.stdin.flush()
-
-            resp_line = proc.stdout.readline()
-            proc.terminate()
-
-            if not resp_line:
-                return None
-
-            data = json.loads(resp_line)
-            content_list = data.get("result", {}).get("content", [])
-            if not content_list:
-                return None
-
-            text = content_list[0].get("text", "")
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-            return None
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(self.list_tools_async())).result(timeout=self.timeout)
         except Exception as e:
-            logger.debug(f"Pre-built osm-mcp call error: {e}. Falling back to internal engine.")
+            logger.debug(f"Could not list tools from osm-mcp: {e}")
+            return ["geocode", "straight_line_distance", "route"]
+
+    async def call_tool_async(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Executes a tool on the pre-built osm-mcp server using the official MCP SDK sequence:
+        stdio_client -> ClientSession -> session.initialize() -> session.call_tool()
+        """
+        server_params = self._get_server_params()
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(tool_name, arguments=arguments)
+                if result.content:
+                    text = result.content[0].text
+                    match = re.search(r"\{.*\}", text, re.DOTALL)
+                    if match:
+                        return json.loads(match.group(0))
+                    return {"raw": text}
+                return None
+
+    def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Synchronous runner for calling an MCP tool via the official SDK."""
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(self.call_tool_async(tool_name, arguments))).result(timeout=self.timeout)
+        except Exception as e:
+            logger.debug(f"Pre-built osm-mcp tool call failed ({tool_name}): {e}")
             return None
 
     def geocode(self, location_name: str) -> Dict[str, Any]:
         """
-        Geocodes a destination using pre-built osm-mcp server with fallback.
+        Geocodes a destination using pre-built osm-mcp 'geocode' tool with verified fallback.
         """
         if not location_name or not location_name.strip():
             return {
@@ -96,8 +95,8 @@ class OSMMCPClient:
         query = location_name.strip()
         search_term = query if "ahmedabad" in query.lower() else f"{query}, Ahmedabad"
 
-        # Try pre-built OSM MCP server first
-        osm_res = self._call_mcp_tool("geocode", {"query": search_term})
+        # 1. Call pre-built osm-mcp server via official MCP ClientSession
+        osm_res = self.call_tool("geocode", {"query": search_term})
         if osm_res and isinstance(osm_res, dict) and "results" in osm_res:
             results = osm_res.get("results", [])
             if results and len(results) > 0:
@@ -111,10 +110,24 @@ class OSMMCPClient:
                     "source": "osm_mcp_prebuilt"
                 }
 
-        # Fallback to local landmark catalog
+        # 2. Seamless fallback to local verified landmark database
         try:
-            raw_res = _srv_geocode(location_name)
-            return json.loads(raw_res)
+            place_info = location_service.resolve_place_coordinates(location_name)
+            if place_info:
+                return {
+                    "success": True,
+                    "place": location_name,
+                    "display_name": place_info["display_name"],
+                    "latitude": round(place_info["latitude"], 4),
+                    "longitude": round(place_info["longitude"], 4),
+                    "source": "verified_landmark_catalog"
+                }
+            return {
+                "success": False,
+                "error": f"Coordinates unavailable for '{location_name}'",
+                "place": location_name,
+                "coordinates": None
+            }
         except Exception as e:
             return {
                 "success": False,
@@ -133,13 +146,13 @@ class OSMMCPClient:
         dest_lon: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Calculates straight-line or route distance using osm-mcp with fallback.
+        Calculates straight-line or route distance using pre-built osm-mcp with fallback.
         """
-        # If coordinates provided, attempt osm-mcp straight_line_distance
+        # If coordinates provided, call osm-mcp 'straight_line_distance' via official SDK
         if origin_lat is not None and origin_lon is not None and dest_lat is not None and dest_lon is not None:
             from_pt = f"{origin_lat},{origin_lon}"
             to_pt = f"{dest_lat},{dest_lon}"
-            dist_res = self._call_mcp_tool("straight_line_distance", {"from": from_pt, "to": to_pt})
+            dist_res = self.call_tool("straight_line_distance", {"from": from_pt, "to": to_pt})
             if dist_res and "distance_m" in dist_res:
                 dist_km = round(float(dist_res["distance_m"]) / 1000.0, 2)
                 return {
@@ -151,17 +164,25 @@ class OSMMCPClient:
                     "source": "osm_mcp_prebuilt"
                 }
 
-        # Fallback to internal distance engine
+        # Seamless fallback to internal distance engine
         try:
-            raw_res = _srv_distance(
-                origin_name=origin_name,
-                destination_name=destination_name,
+            if origin_lat is None or origin_lon is None:
+                o_info = location_service.resolve_place_coordinates(origin_name)
+                if o_info:
+                    origin_lat, origin_lon = o_info["latitude"], o_info["longitude"]
+            if dest_lat is None or dest_lon is None:
+                d_info = location_service.resolve_place_coordinates(destination_name)
+                if d_info:
+                    dest_lat, dest_lon = d_info["latitude"], d_info["longitude"]
+
+            return _calc_dist(
                 origin_lat=origin_lat,
                 origin_lon=origin_lon,
                 dest_lat=dest_lat,
-                dest_lon=dest_lon
+                dest_lon=dest_lon,
+                origin_name=origin_name,
+                dest_name=destination_name
             )
-            return json.loads(raw_res)
         except Exception as e:
             return {
                 "success": False,
@@ -169,6 +190,14 @@ class OSMMCPClient:
                 "distance_km": None
             }
 
-# Singleton instances
-location_client = OSMMCPClient()
+# Aliases and singleton instances
+OSMMCPClient = LocationClient
+location_client = LocationClient()
 osm_location_client = location_client
+
+__all__ = [
+    "LocationClient",
+    "OSMMCPClient",
+    "location_client",
+    "osm_location_client"
+]

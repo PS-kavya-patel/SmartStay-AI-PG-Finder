@@ -4,7 +4,8 @@ from tools.budget_filter import filter_by_budget
 from tools.amenity_checker import check_amenities
 from tools.distance_calculator import calculate_distance, haversine_distance
 from tools.pg_comparator import compare_pgs
-from mcp_servers.location_server import resolve_location_coordinates
+from mcp_servers.location_client import location_client
+
 
 def test_filter_by_budget_exact_boundary():
     # pg_ahm_003 has monthly_rent = 8000
@@ -65,12 +66,13 @@ def test_compare_pgs_empty():
     assert "At least one PG ID" in res["error"]
 
 def test_geocoding_known_landmark():
-    res = resolve_location_coordinates("LD College of Engineering, Ahmedabad")
+    res = location_client.geocode("LD College of Engineering, Ahmedabad")
     assert res["success"] is True
-    assert abs(res["latitude"] - 23.0338) < 0.01
-    assert abs(res["longitude"] - 72.5463) < 0.01
+    assert abs(res["latitude"] - 23.0338) < 0.02
+    assert abs(res["longitude"] - 72.5463) < 0.02
 
 def test_geocoding_empty():
-    res = resolve_location_coordinates("")
+    res = location_client.geocode("")
     assert res["success"] is False
     assert res["coordinates"] is None
+

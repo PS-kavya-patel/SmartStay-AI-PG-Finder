@@ -48,9 +48,8 @@ smartstay-agent/
 │
 ├── mcp_servers/
 │   ├── pg_server.py            # Custom SmartStay FastMCP server (stdio)
-│   ├── location_server.py      # Pre-built Location FastMCP server (stdio)
-│   ├── location_client.py      # Location client wrapper & fallback catalog
-│   └── server_config.json      # MCP multi-server registry configuration
+│   ├── location_client.py      # Official MCP client connecting to pre-built osm-mcp
+│   └── server_config.json      # MCP multi-server registry configuration (pg_server + osm-mcp)
 │
 ├── tools/
 │   ├── pg_search.py            # PG search & detail retrieval

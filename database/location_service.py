@@ -87,5 +87,67 @@ class LocationService:
                         return dest
         return None
 
+    def resolve_place_coordinates(self, place_query: str) -> Optional[Dict[str, Any]]:
+        """Resolves a landmark, college, or neighborhood into latitude and longitude."""
+        if not place_query or not place_query.strip():
+            return None
+        clean = place_query.strip().lower()
+
+        # 1. High-accuracy landmark dictionary for Ahmedabad educational and corporate hubs
+        known_landmarks = {
+            "ld college of engineering": {"lat": 23.0338, "lon": 72.5463, "display_name": "L.D. College of Engineering, Navrangpura, Ahmedabad"},
+            "ld college": {"lat": 23.0338, "lon": 72.5463, "display_name": "L.D. College of Engineering, Navrangpura, Ahmedabad"},
+            "gujarat university": {"lat": 23.0375, "lon": 72.5458, "display_name": "Gujarat University, Navrangpura, Ahmedabad"},
+            "cept university": {"lat": 23.0380, "lon": 72.5480, "display_name": "CEPT University, Navrangpura, Ahmedabad"},
+            "st. xavier's college": {"lat": 23.0322, "lon": 72.5567, "display_name": "St. Xavier's College, Navrangpura, Ahmedabad"},
+            "iim ahmedabad": {"lat": 23.0315, "lon": 72.5312, "display_name": "IIM Ahmedabad (IIM-A), Vastrapur, Ahmedabad"},
+            "iima": {"lat": 23.0315, "lon": 72.5312, "display_name": "IIM Ahmedabad (IIM-A), Vastrapur, Ahmedabad"},
+            "national institute of design": {"lat": 23.0122, "lon": 72.5683, "display_name": "National Institute of Design (NID), Paldi, Ahmedabad"},
+            "nid": {"lat": 23.0122, "lon": 72.5683, "display_name": "National Institute of Design (NID), Paldi, Ahmedabad"},
+            "ahmedabad management association": {"lat": 23.0305, "lon": 72.5348, "display_name": "AMA, Vastrapur, Ahmedabad"},
+            "ama": {"lat": 23.0305, "lon": 72.5348, "display_name": "AMA, Vastrapur, Ahmedabad"},
+            "gujarat chamber of commerce": {"lat": 23.0135, "lon": 72.5702, "display_name": "GCCI, Paldi, Ahmedabad"},
+            "gcci": {"lat": 23.0135, "lon": 72.5702, "display_name": "GCCI, Paldi, Ahmedabad"},
+            "pinnacle business park": {"lat": 23.0425, "lon": 72.5110, "display_name": "Pinnacle Business Park, Bodakdev, Ahmedabad"},
+            "judges bungalow": {"lat": 23.0410, "lon": 72.5135, "display_name": "Judges Bungalow Hub, Bodakdev, Ahmedabad"},
+            "isro": {"lat": 23.0232, "lon": 72.5186, "display_name": "ISRO Space Applications Centre, Satellite, Ahmedabad"},
+            "space applications centre": {"lat": 23.0232, "lon": 72.5186, "display_name": "ISRO Space Applications Centre, Satellite, Ahmedabad"},
+            "shivranjani": {"lat": 23.0265, "lon": 72.5255, "display_name": "Shivranjani Hub, Satellite, Ahmedabad"},
+        }
+        for landmark_key, landmark_info in known_landmarks.items():
+            if landmark_key in clean:
+                return {
+                    "latitude": landmark_info["lat"],
+                    "longitude": landmark_info["lon"],
+                    "display_name": landmark_info["display_name"]
+                }
+
+        # 2. Check destination dataset
+        info = self.get_destination_info(clean)
+        if info:
+            return {
+                "latitude": info["lat"],
+                "longitude": info["lon"],
+                "display_name": info["name"]
+            }
+
+        # 3. Check neighborhood centers
+        area_centers = {
+            "navrangpura": (23.0373, 72.5532),
+            "vastrapur": (23.0350, 72.5293),
+            "bodakdev": (23.0425, 72.5110),
+            "satellite": (23.0280, 72.5190),
+            "paldi": (23.0125, 72.5620),
+            "ahmedabad": (23.0225, 72.5714),
+        }
+        for area_name, (lat, lon) in area_centers.items():
+            if area_name in clean:
+                return {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "display_name": f"{area_name.capitalize()}, Ahmedabad"
+                }
+        return None
+
 # Singleton instance
 location_service = LocationService()

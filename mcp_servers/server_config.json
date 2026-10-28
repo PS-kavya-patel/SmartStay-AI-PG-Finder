@@ -9,11 +9,6 @@
       "command": "npx",
       "args": ["-y", "osm-mcp"],
       "description": "Pre-Built OpenStreetMap (OSM) Location MCP Server providing real-world geocoding, route distance, travel duration, and straight-line distance."
-    },
-    "location-server-fallback": {
-      "command": "python",
-      "args": ["mcp_servers/location_server.py"],
-      "description": "Offline-safe landmark and location fallback server."
     }
   }
 }

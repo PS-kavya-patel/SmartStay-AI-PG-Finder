@@ -17,8 +17,9 @@ In SmartStay:
 ### Q2: Why split the system into two separate MCP servers?
 **Answer:**  
 In accordance with Level 2 architectural specifications, we maintain clean separation of concerns:
-1. **Pre-Built Location MCP Server (`location-server`)**: Handles spatial intelligence — geocoding addresses and calculating straight-line distances. It has no knowledge of PG rental business logic.
+1. **Pre-Built Location MCP Server (`osm-location-server` / `osm-mcp`)**: Handles spatial intelligence — geocoding addresses and calculating route and straight-line distances via OpenStreetMap. It has no knowledge of PG rental business logic.
 2. **Custom SmartStay MCP Server (`smartstay-pg-server`)**: Handles PG domain operations — candidate searches, budget filtering, facility checks, side-by-side comparisons, and multi-factor ranking.
+
 
 This separation ensures that either server can be swapped, scaled, or upgraded independently without breaking the other.
 
