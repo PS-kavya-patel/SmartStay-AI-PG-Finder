@@ -3,12 +3,18 @@
     "smartstay-pg-server": {
       "command": "python",
       "args": ["mcp_servers/pg_server.py"],
-      "description": "SmartStay PG Server handling accommodation searches, budget filtering, amenity verification, comparisons, and rankings."
+      "description": "SmartStay Custom PG Server handling accommodation searches, budget filtering, amenity verification, comparisons, and rankings."
     },
-    "location-server": {
+    "osm-location-server": {
+      "command": "npx",
+      "args": ["-y", "osm-mcp"],
+      "description": "Pre-Built OpenStreetMap (OSM) Location MCP Server providing real-world geocoding, route distance, travel duration, and straight-line distance."
+    },
+    "location-server-fallback": {
       "command": "python",
       "args": ["mcp_servers/location_server.py"],
-      "description": "Location MCP Server handling geocoding, landmark resolution, and straight-line distance calculations."
+      "description": "Offline-safe landmark and location fallback server."
     }
   }
 }
+

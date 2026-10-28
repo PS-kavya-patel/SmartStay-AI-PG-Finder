@@ -34,6 +34,8 @@ from mcp_servers.location_server import (
     geocode_location as _tool_geocode,
     get_distance_and_route_info as _tool_dist_route
 )
+from mcp_servers.location_client import location_client
+
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +70,9 @@ class SmartStayAgent:
         """Registers all tools available across Custom SmartStay and Location MCP servers."""
         return {
             "geocode_location": {
-                "func": lambda **kwargs: _tool_geocode(kwargs.get("location_name", "")),
-                "description": "Geocode a place name into verified latitude and longitude.",
-                "server": "location-server"
+                "func": lambda **kwargs: json.dumps(location_client.geocode(kwargs.get("location_name", "")), indent=2),
+                "description": "Geocode place or landmark to GPS coordinates via Pre-Built OpenStreetMap (OSM) MCP server.",
+                "server": "osm-location-server"
             },
             "search_pgs": {
                 "func": lambda **kwargs: json.dumps(_tool_search_pgs(
@@ -99,17 +101,18 @@ class SmartStayAgent:
                 "server": "smartstay-pg-server"
             },
             "calculate_distance": {
-                "func": lambda **kwargs: json.dumps(_tool_calc_dist(
+                "func": lambda **kwargs: json.dumps(location_client.compute_distance(
                     origin_lat=kwargs.get("origin_lat"),
                     origin_lon=kwargs.get("origin_lon"),
                     dest_lat=kwargs.get("dest_lat"),
                     dest_lon=kwargs.get("dest_lon"),
                     origin_name=kwargs.get("origin_name", "Origin"),
-                    dest_name=kwargs.get("dest_name", "Destination")
+                    destination_name=kwargs.get("dest_name", "Destination")
                 ), indent=2),
-                "description": "Calculate straight-line Haversine distance in km.",
-                "server": "location-server"
+                "description": "Calculate distance in km via Pre-Built OpenStreetMap (OSM) MCP server.",
+                "server": "osm-location-server"
             },
+
             "compare_pgs": {
                 "func": lambda **kwargs: json.dumps(_tool_compare_pgs(
                     pg_ids=kwargs.get("pg_ids", [])
@@ -534,7 +537,7 @@ class SmartStayAgent:
         # 1. Geocode destination if needed
         dest_coords = None
         if criteria.destination_name:
-            geo_res = resolve_location_coordinates(criteria.destination_name)
+            geo_res = location_client.geocode(criteria.destination_name)
             observations.append({"tool": "geocode_location", "result": geo_res})
             if geo_res.get("success"):
                 dest_coords = {"lat": geo_res["latitude"], "lon": geo_res["longitude"]}
