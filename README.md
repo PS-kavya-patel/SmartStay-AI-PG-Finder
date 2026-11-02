@@ -47,23 +47,23 @@ This codebase includes complete remediations for all five Level 2 practitioner a
 ## 🏗️ System Architecture
 
 ```mermaid
-graph TD
-    User([User Request]) --> UI[Streamlit Web App / CLI]
-    UI --> Agent[SmartStay ReAct Agent]
+flowchart TD
+    User(["User Request"]) --> UI["Streamlit Web App / CLI"]
+    UI --> Agent["SmartStay ReAct Agent"]
     
-    subgraph Cognitive Layer
-        Agent <--> LLM[Local LLM via Ollama<br/>Mistral 7B / Llama 3.2]
+    subgraph CognitiveLayer ["Cognitive Layer"]
+        Agent <--> LLM["Local LLM via Ollama<br/>Mistral 7B / Llama 3.2"]
     end
 
-    subgraph MCP Multi-Server Protocol (stdio)
-        Agent <== "stdio: ClientSession" ==> MCP_PG[Custom PG Server: FastMCP<br/>• search_pgs • filter_by_budget<br/>• check_amenities • rank_pgs<br/>• calculate_distance • compare_pgs]
-        Agent <== "stdio: ClientSession" ==> MCP_OSM[Pre-Built OSM Server: osm-mcp<br/>• geocode • straight_line_distance]
+    subgraph MCPProtocol ["MCP Multi-Server Protocol (stdio)"]
+        Agent <-->|"stdio: ClientSession"| MCP_PG["Custom PG Server: FastMCP<br/>• search_pgs • filter_by_budget<br/>• check_amenities • rank_pgs<br/>• calculate_distance • compare_pgs"]
+        Agent <-->|"stdio: ClientSession"| MCP_OSM["Pre-Built OSM Server: osm-mcp<br/>• geocode • straight_line_distance"]
     end
 
-    subgraph Dual-Layer Verification Guardrail
-        Agent --> Val[Deterministic Rule Validator<br/>• Rent check • Amenity check • ID check]
-        Val --> Ref[One-Shot Reflection Auditor<br/>• Hard priority gate • Evidence audit]
-        Ref --> Response([Verified Grounded Recommendation])
+    subgraph Guardrails ["Dual-Layer Verification Guardrail"]
+        Agent --> Val["Deterministic Rule Validator<br/>• Rent check • Amenity check • ID check"]
+        Val --> Ref["One-Shot Reflection Auditor<br/>• Hard priority gate • Evidence audit"]
+        Ref --> Response(["Verified Grounded Recommendation"])
     end
 ```
 
@@ -86,12 +86,12 @@ sequenceDiagram
     
     loop ReAct Loop (Thought -> Action -> Observation)
         Agent->>LLM: Prompt + Conversation State + Tool Schemas
-        LLM-->>Agent: Thought: Need location coordinates<br/>Action: geocode_location {"landmark": "LD College"}
+        LLM-->>Agent: Thought: Need location coordinates<br/>Action: geocode_location(landmark='LD College')
         Agent->>MCP: session.call_tool("geocode_location", args)
-        MCP-->>Agent: Observation: {"lat": 23.0338, "lon": 72.5466}
-        Agent->>LLM: Thought: Search and filter candidates<br/>Action: search_pgs {"city": "Ahmedabad", "gender": "girls"}
+        MCP-->>Agent: Observation: Coordinates returned
+        Agent->>LLM: Thought: Search and filter candidates<br/>Action: search_pgs(city='Ahmedabad', gender='girls')
         Agent->>MCP: session.call_tool("search_pgs", args)
-        MCP-->>Agent: Observation: [PG Records]
+        MCP-->>Agent: Observation: Matching PG listings
     end
 
     Agent->>Guard: Validate draft text against database ground truth
@@ -103,37 +103,14 @@ sequenceDiagram
 
 ## 📊 Explainable Scoring Formula (100 Points)
 
-SmartStay ranks matching accommodations using a transparent, multi-factor scoring formula defined in [`services/scoring_service.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/services/scoring_service.py):
+$$\text{Final Score} = \text{Budget Score (30)} + \text{Proximity Score (30)} + \text{Amenity Score (25)} + \text{Rating Score (15)}$$
 
-$$\text{Total Score} = \text{Budget Score (30)} + \text{Proximity Score (30)} + \text{Amenity Score (25)} + \text{Rating Score (15)}$$
-
-| Factor | Max Weight | Exact Formula in Code | Implementation Rationale |
+| Factor | Weight | Scoring Formula in Code (`scoring_service.py`) | Rationale |
 | :--- | :---: | :--- | :--- |
-| **Budget Proximity** | **30 pts** | If $\text{Rent} \le \text{Budget}$:<br/>$20.0 + \min\left(\frac{\text{Budget} - \text{Rent}}{\text{Budget}} \times 10, 10.0\right)$<br/>If $\text{Rent} > \text{Budget}$: $0.0\text{ pts}$ | Awards a 20-point baseline for staying under budget, plus up to 10 bonus points for savings. Disqualifies over-budget listings. |
-| **Distance Proximity** | **30 pts** | $\le 1.0\text{ km} \rightarrow \mathbf{30.0\text{ pts}}$<br/>$1.0 - 2.0\text{ km} \rightarrow \mathbf{25.0\text{ pts}}$<br/>$2.0 - 3.0\text{ km} \rightarrow \mathbf{20.0\text{ pts}}$<br/>$3.0 - 5.0\text{ km} \rightarrow \mathbf{12.0\text{ pts}}$<br/>$> 5.0\text{ km} \rightarrow \max\left(10 - (\text{dist}-5)\times 2, 0\right)$ | Prioritizes walkable accommodations close to college or workplace. Missing coordinates receive 0 pts and are excluded if distance is strict. |
-| **Amenity Match** | **25 pts** | $25.0 \times \frac{\text{Matched Amenities}}{\text{Requested Amenities}}$ | Proportional reward for each requested facility (Wi-Fi, Food, AC, Laundry, etc.). Full score if no specific amenities are requested. |
-| **User Rating** | **15 pts** | $15.0 \times \frac{\text{Verified Rating}}{5.0}$ | Grounded in verified resident reviews. Defaults to neutral 10 pts (3.33 rating) if unrated. |
-
-### Worked Example: Shiv Shakti Boys PG (`pg_ahm_003`)
-* **User Query**: Boys PG near LD College, max budget ₹9,000, requesting AC.
-* **Database Values**: Rent = ₹8,000/mo, Haversine distance = 0.33 km, Amenities include AC, Rating = 4.6/5.0.
-* **Score Calculation**:
-  1. $\text{Budget Score} = 20.0 + \min\left(\frac{9000 - 8000}{9000} \times 10, 10\right) = 20.0 + 1.11 = \mathbf{21.11\text{ pts}}$
-  2. $\text{Distance Score} = 0.33\text{ km} \le 1.0\text{ km} \rightarrow \mathbf{30.00\text{ pts}}$
-  3. $\text{Amenity Score} = 25.0 \times \frac{1}{1} = \mathbf{25.00\text{ pts}}$
-  4. $\text{Rating Score} = 15.0 \times \frac{4.6}{5.0} = \mathbf{13.80\text{ pts}}$
-* **Total Score**: $21.11 + 30.00 + 25.00 + 13.80 = \mathbf{89.91\text{ / }100}$ (Rank #1)
-
----
-
-## 🗄️ Dataset Provenance & Edge-Case Modeling
-
-The database [`data/pg_records.json`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/data/pg_records.json) contains **12 realistic accommodations** across major student hubs in Ahmedabad (Navrangpura, Gulbai Tekra, Vastrapur, Memnagar, Naranpura):
-- **Verified Coordinates**: 11 records have real geographic coordinates grounded against OpenStreetMap landmarks.
-- **Missing Coordinates Edge Case (`pg_ahm_012`)**: "Radhe Krishna Co-Living" intentionally features `latitude: null` and `longitude: null`. This models real-world API geocoding failures:
-  - If a user specifies a **strict distance limit** ("within 2 km"), `pg_ahm_012` is excluded because proximity cannot be proven.
-  - If no distance limit is requested, `pg_ahm_012` is included with distance score `0.0` and clearly marked `"Distance unverified"`.
-- **Distance Disclaimer**: SmartStay calculates spherical distances using the **Haversine formula** and explicitly labels all outputs as straight-line distance rather than walking or driving routes.
+| **Budget Savings** | **30 pts** | $20.0 + \min\left(\frac{\text{Budget} - \text{Rent}}{\text{Budget}} \times 10, 10\right)$ (if rent $\le$ budget; 0 if rent > budget) | Grants 20 pt baseline for meeting budget cap, plus up to 10 bonus points for savings. |
+| **Proximity** | **30 pts** | $\le 1\text{ km}: 30\text{ pts}$; $1\text{–}2\text{ km}: 25\text{ pts}$; $2\text{–}3\text{ km}: 20\text{ pts}$; $3\text{–}5\text{ km}: 12\text{ pts}$; $> 5\text{ km}$: decay | Prioritizes walkable accommodations close to college/office. Unknown coordinates are marked unverified and excluded under strict distance limits. |
+| **Amenities** | **25 pts** | $25 \times \frac{\text{Matched Requested Amenities}}{\text{Total Requested Amenities}}$ | Proportional reward for each requested facility (Wi-Fi, Food, AC, etc.). |
+| **User Rating** | **15 pts** | $15 \times \frac{\text{Rating}}{5.0}$ (unrated defaults to neutral 10 pts) | Grounded in verified resident review scores. |
 
 ---
 
@@ -141,39 +118,29 @@ The database [`data/pg_records.json`](file:///c:/Users/KavyaPatel/Downloads/L2%2
 
 ```
 SmartStay-AI-PG-Finder/
-├── agent.py                    # CLI entrypoint with transcript recording (--record)
+├── agent.py                    # CLI entrypoint with transcript recording
 ├── app.py                      # Interactive Streamlit Web Application
-├── config.py                   # Central settings, paths, timeouts, and scoring weights
-├── requirements.txt            # Python dependencies (mcp, fastmcp, pydantic, httpx, etc.)
-├── pytest.ini                  # Pytest configuration with asyncio and markers
+├── config.py                   # Central settings (models, paths, weights, timeouts)
+├── requirements.txt            # Python dependencies
+├── pytest.ini                  # Pytest configuration
 │
 ├── agents/
-│   ├── smartstay_agent.py      # Core ReAct agent with MCP ClientSession integration
-│   └── reflection_agent.py     # Deterministic-gated reflection auditor & fallback
+│   ├── smartstay_agent.py      # Core ReAct agent with dynamic MCP ClientSession discovery
+│   └── reflection_agent.py     # One-shot reflection & factual claim auditor
 │
 ├── mcp_servers/
-│   ├── __init__.py             # Exports PGClient and LocationClient
-│   ├── pg_server.py            # Custom FastMCP server exposing 7 accommodation tools
-│   ├── pg_client.py            # Official MCP stdio client connecting to pg_server.py
-│   ├── location_client.py      # Official MCP stdio client connecting to osm-mcp
-│   └── server_config.json      # Dual-server MCP configuration
+│   ├── __init__.py             # Clean package exports
+│   ├── pg_server.py            # Custom accommodation FastMCP server (stdio)
+│   ├── pg_client.py            # Official Python MCP client connecting to pg_server.py
+│   ├── location_client.py      # Official Python MCP client connecting to osm-mcp
+│   └── server_config.json      # Dual-server configuration
 │
-├── tools/
-│   ├── pg_search.py            # Search listings by city and gender
-│   ├── budget_filter.py        # Strict budget threshold filtering
-│   ├── amenity_checker.py      # Facility matching and mandatory checks
-│   ├── distance_calculator.py  # Haversine distance calculations
-│   └── pg_ranker.py            # Multi-factor explainable ranking engine
-│
-├── database/                   # Data service and verified landmark catalog
-├── data/                       # Verified PG records dataset (pg_records.json)
-├── services/
-│   ├── scoring_service.py      # 0–100 mathematical scoring engine
-│   └── validation_service.py   # Sentence-level factual claim verification
-│
+├── tools/                      # Search, budget, amenity, distance & ranker tools
+├── database/                   # Verified PG data (pg_records.json) & locations catalog
+├── services/                   # Validation service (factual claim audit) & 0-100 scoring engine
 ├── models/                     # Pydantic schemas (Listings, Validation, Reflection)
-├── prompts/                    # ReAct agent system prompt and reflection auditor prompt
-├── tests/                      # Automated unit, regression, and MCP tests (41 passed)
+├── prompts/                    # ReAct agent & reflection auditor prompts
+├── tests/                      # Automated unit, edge-case, regression & MCP tests (41 tests)
 ├── docs/                       # Architecture, testing, and viva preparation guides
 └── evidence/                   # Recorded CLI demonstration transcripts
 ```
@@ -218,7 +185,7 @@ Run the autonomous ReAct agent with automatic live transcript logging:
 ```powershell
 python agent.py --record --query "Find a girls' PG in Ahmedabad under ₹8,000 per month, within 3 km of LD College, with Wi-Fi and food."
 ```
-The full execution trace is automatically captured in [`evidence/demo_transcript.txt`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/evidence/demo_transcript.txt).
+The full execution trace is automatically captured in [`evidence/demo_transcript.txt`](evidence/demo_transcript.txt).
 
 ### 5. Launch Streamlit Web App
 ```powershell
@@ -234,11 +201,11 @@ The test suite covers edge cases, boundary conditions, MCP transports, and regre
 
 | Test File | Tests Passed | Key Capabilities Verified |
 |---|:---:|---|
-| [`tests/test_agent.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/tests/test_agent.py) | **8** | Dynamic MCP tool discovery; ReAct iteration limit (max 6); criteria extraction blockers ("8k", "3 km", "\bac\b", no landmark fallback); final prose regeneration without rejected PGs. |
-| [`tests/test_mcp_tools.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/tests/test_mcp_tools.py) | **14** | FastMCP stdio client discovery; `call_tool()` execution over MCP; strict distance exclusion of missing GPS (`pg_ahm_012`); budget boundary checks; amenity checks; Haversine range validation. |
-| [`tests/test_scoring.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/tests/test_scoring.py) | **3** | Exact mathematical scoring (budget, distance, amenities, rating); unverified distance score calculation; distance cutoff filtering. |
-| [`tests/test_search.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/tests/test_search.py) | **7** | Candidate searches by gender, city, and neighborhood; detail lookups; empty search handling. |
-| [`tests/test_validation.py`](file:///c:/Users/KavyaPatel/Downloads/L2%20FINAL%20PROJECT/tests/test_validation.py) | **9** | Factual claim rejection (₹1 rent, swimming pool); rejected PG prose leakage guard; strict distance rejection of missing GPS; budget and gender violations; reflection correction. |
+| [`tests/test_agent.py`](tests/test_agent.py) | **8** | Dynamic MCP tool discovery; ReAct iteration limit (max 6); criteria extraction blockers ("8k", "3 km", "\bac\b", no landmark fallback); final prose regeneration without rejected PGs. |
+| [`tests/test_mcp_tools.py`](tests/test_mcp_tools.py) | **14** | FastMCP stdio client discovery; `call_tool()` execution over MCP; strict distance exclusion of missing GPS (`pg_ahm_012`); budget boundary checks; amenity checks; Haversine range validation. |
+| [`tests/test_scoring.py`](tests/test_scoring.py) | **3** | Exact mathematical scoring (budget, distance, amenities, rating); unverified distance score calculation; distance cutoff filtering. |
+| [`tests/test_search.py`](tests/test_search.py) | **7** | Candidate searches by gender, city, and neighborhood; detail lookups; empty search handling. |
+| [`tests/test_validation.py`](tests/test_validation.py) | **9** | Factual claim rejection (₹1 rent, swimming pool); rejected PG prose leakage guard; strict distance rejection of missing GPS; budget and gender violations; reflection correction. |
 | **Total** | **41** | **All 41 non-integration tests passing with 0 failures.** |
 
 ---

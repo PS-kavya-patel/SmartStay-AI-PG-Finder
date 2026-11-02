@@ -7,29 +7,29 @@ SmartStay is an AI-powered accommodation finder agent built on the **Model Conte
 ## 1. System Architecture Diagram
 
 ```mermaid
-graph TD
-    User([User Request / Query]) --> UI[Streamlit UI / CLI Interface]
-    UI --> Agent[SmartStay AI Agent (agents/smartstay_agent.py)]
+flowchart TD
+    User(["User Request / Query"]) --> UI["Streamlit UI / CLI Interface"]
+    UI --> Agent["SmartStay AI Agent (agents/smartstay_agent.py)"]
 
-    subgraph LLM Layer
-        Ollama[Ollama Local LLM (Mistral 7B / Llama 3.2 3B)]
+    subgraph LLMLayer ["LLM Layer"]
+        Ollama["Ollama Local LLM (Mistral 7B / Llama 3.2 3B)"]
     end
 
-    subgraph Model Context Protocol (MCP) Multi-Server Layer
-        MCP_PG[Custom SmartStay PG MCP Server (mcp_servers/pg_server.py)]
-        MCP_LOC[Pre-Built OpenStreetMap Location MCP Server (npx -y osm-mcp)]
+    subgraph MCPLayer ["Model Context Protocol (MCP) Multi-Server Layer"]
+        MCP_PG["Custom SmartStay PG MCP Server (mcp_servers/pg_server.py)"]
+        MCP_LOC["Pre-Built OpenStreetMap Location MCP Server (npx -y osm-mcp)"]
     end
 
-    subgraph Data & Business Logic
-        DB[(PG Dataset: database/pg_data.json)]
-        DataService[database/data_service.py]
-        Scoring[services/scoring_service.py]
-        Tools[tools/*: search, budget, amenities, distance, rank, compare]
+    subgraph DataLogic ["Data & Business Logic"]
+        DB[("PG Dataset: database/pg_records.json")]
+        DataService["database/data_service.py"]
+        Scoring["services/scoring_service.py"]
+        Tools["tools/*: search, budget, amenities, distance, rank, compare"]
     end
 
-    subgraph Dual-Layer Verification
-        ValService[Deterministic Validation (services/validation_service.py)]
-        RefAgent[One-Shot Reflection Agent (agents/reflection_agent.py)]
+    subgraph VerificationLayer ["Dual-Layer Verification"]
+        ValService["Deterministic Validation (services/validation_service.py)"]
+        RefAgent["One-Shot Reflection Agent (agents/reflection_agent.py)"]
     end
 
     Agent <--> Ollama
