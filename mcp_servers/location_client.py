@@ -32,26 +32,53 @@ class LocationClient:
         return StdioServerParameters(
             command=self._command,
             args=["-y", "osm-mcp"],
+
+
+            
             env=None
         )
 
-    async def list_tools_async(self) -> List[str]:
+    async def list_tools_async(self) -> List[Dict[str, Any]]:
         """Discovers tools exposed by the pre-built osm-mcp server using the official MCP SDK."""
         server_params = self._get_server_params()
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tools_result = await session.list_tools()
-                return [t.name for t in tools_result.tools]
+                return [
+                    {
+                        "name": t.name,
+                        "description": t.description or "",
+                        "input_schema": t.inputSchema if hasattr(t, "inputSchema") else getattr(t, "input_schema", {}),
+                        "server": "osm-location-server"
+                    }
+                    for t in tools_result.tools
+                ]
 
-    def list_tools(self) -> List[str]:
+    def list_tools(self) -> List[Dict[str, Any]]:
         """Synchronous wrapper for discovering tools via official MCP SDK."""
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(lambda: asyncio.run(self.list_tools_async())).result(timeout=self.timeout)
+            future = pool.submit(lambda: asyncio.run(self.list_tools_async()))
+            return future.result(timeout=self.timeout)
         except Exception as e:
             logger.debug(f"Could not list tools from osm-mcp: {e}")
-            return ["geocode", "straight_line_distance", "route"]
+            return [
+                {
+                    "name": "geocode",
+                    "description": "Geocodes place or landmark to GPS coordinates via OpenStreetMap.",
+                    "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}},
+                    "server": "osm-location-server"
+                },
+                {
+                    "name": "straight_line_distance",
+                    "description": "Calculates straight line distance in meters between two coordinates.",
+                    "input_schema": {"type": "object", "properties": {"from": {"type": "string"}, "to": {"type": "string"}}},
+                    "server": "osm-location-server"
+                }
+            ]
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     async def call_tool_async(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -73,12 +100,15 @@ class LocationClient:
 
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Synchronous runner for calling an MCP tool via the official SDK."""
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(lambda: asyncio.run(self.call_tool_async(tool_name, arguments))).result(timeout=self.timeout)
+            future = pool.submit(lambda: asyncio.run(self.call_tool_async(tool_name, arguments)))
+            return future.result(timeout=self.timeout)
         except Exception as e:
             logger.debug(f"Pre-built osm-mcp tool call failed ({tool_name}): {e}")
             return None
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     def geocode(self, location_name: str) -> Dict[str, Any]:
         """

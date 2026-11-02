@@ -15,6 +15,7 @@ class ReflectionAgent:
     Performs one-shot reflection and evidence auditing.
     Checks the agent's proposed draft against tool evidence and deterministic validation results.
     Corrects unsupported claims and ensures constraint satisfaction.
+    Guarantees that reflection CANNOT override failed deterministic validation.
     """
 
     def __init__(self, model_name: Optional[str] = None, host: Optional[str] = None, client: Optional[Any] = None):
@@ -41,6 +42,7 @@ class ReflectionAgent:
         """
         Audits draft response. If validation failed or unsupported statements exist,
         generates critique and a corrected response, then re-validates.
+        Deterministic errors CANNOT be overridden by LLM reflection approval.
         """
         # If deterministic validation already passed with no warnings, draft is solid
         if validation_result.is_valid and not validation_result.warnings:
@@ -76,10 +78,34 @@ class ReflectionAgent:
                 options={"temperature": 0.1, "num_predict": 350}
             )
             raw_output = response["message"]["content"]
-            return self._parse_reflection_output(raw_output, proposed_draft, validation_result)
+            result = self._parse_reflection_output(raw_output, proposed_draft, validation_result)
+
+            # CRITICAL RULE: If initial validation failed, reflection LLM CANNOT approve the draft
+            # unless a valid corrected response was produced that resolves the errors.
+            if not validation_result.is_valid:
+                # If model claims passed or didn't provide meaningful correction, invoke deterministic correction
+                if result.passed_validation or not result.corrected_response or result.corrected_response == proposed_draft:
+                    return self._fallback_correction(
+                        user_query, criteria, proposed_draft, validation_result, recommended_pg_ids, distance_data
+                    )
+                # Verify that the model's corrected response actually resolves issues
+                check_val = ValidationService.validate_recommendations(
+                    recommended_pg_ids=recommended_pg_ids,
+                    criteria=criteria,
+                    proposed_text=result.corrected_response,
+                    distance_data=distance_data
+                )
+                if not check_val.is_valid:
+                    return self._fallback_correction(
+                        user_query, criteria, proposed_draft, validation_result, recommended_pg_ids, distance_data
+                    )
+
+            return result
         except Exception as e:
             logger.warning(f"Ollama reflection call failed or timed out: {e}. Using deterministic fallback correction.")
-            return self._fallback_correction(user_query, criteria, proposed_draft, validation_result, recommended_pg_ids)
+            return self._fallback_correction(
+                user_query, criteria, proposed_draft, validation_result, recommended_pg_ids, distance_data
+            )
 
     def _parse_reflection_output(
         self,
@@ -87,23 +113,24 @@ class ReflectionAgent:
         original_draft: str,
         initial_val: ValidationResult
     ) -> ReflectionResult:
-        passed = "passed: true" in raw_output.lower()
+        model_passed = "passed: true" in raw_output.lower()
 
         critique_match = re.search(r"critique:\s*(.*?)(?=corrected response:|$)", raw_output, re.DOTALL | re.IGNORECASE)
         critique = critique_match.group(1).strip() if critique_match else "Audited draft response."
 
         corr_match = re.search(r"corrected response:\s*(.*)", raw_output, re.DOTALL | re.IGNORECASE)
-        corrected_text = corr_match.group(1).strip() if corr_match else original_draft
+        corrected_text = corr_match.group(1).strip() if corr_match else ""
 
-        if not passed and not corrected_text:
-            corrected_text = original_draft
+        # Deterministic check: if initial validation failed, the draft CANNOT pass
+        effective_passed = model_passed and initial_val.is_valid
+        needs_correction = not effective_passed or bool(corrected_text and corrected_text != original_draft)
 
         return ReflectionResult(
-            passed_validation=passed,
-            needs_correction=not passed,
+            passed_validation=effective_passed,
+            needs_correction=needs_correction,
             critique=critique,
             correction_suggestions=initial_val.errors,
-            corrected_response=corrected_text if not passed else original_draft
+            corrected_response=corrected_text if corrected_text else original_draft
         )
 
     def _fallback_correction(
@@ -112,20 +139,25 @@ class ReflectionAgent:
         criteria: PGSearchCriteria,
         original_draft: str,
         validation_result: ValidationResult,
-        recommended_pg_ids: List[str]
+        recommended_pg_ids: List[str],
+        distance_data: Optional[Dict[str, float]] = None
     ) -> ReflectionResult:
-        """Deterministic fallback correction when LLM reflection is unavailable."""
+        """Deterministic fallback correction guaranteeing zero false claims and strict constraint satisfaction."""
         from database.data_service import data_service
         from tools.amenity_checker import normalize_amenity
 
+        distance_data = distance_data or {}
         valid_pgs = []
+
         for pid in recommended_pg_ids:
-            pg = data_service.get_pg_by_id(pid)
+            pg = data_service.get_pg_by_id(pid.strip())
             if not pg:
                 continue
             if criteria.area and criteria.area.strip().lower() not in ["all areas", "all", ""]:
                 if pg.area.strip().lower() != criteria.area.strip().lower():
                     continue
+            if criteria.city and criteria.city.strip().lower() not in pg.city.strip().lower():
+                continue
             if criteria.max_rent and pg.monthly_rent > criteria.max_rent:
                 continue
             if criteria.gender:
@@ -142,28 +174,35 @@ class ReflectionAgent:
                 pg_norm = [normalize_amenity(a) for a in pg.amenities]
                 if any(normalize_amenity(req) not in pg_norm for req in criteria.required_amenities):
                     continue
+            if criteria.max_distance_km is not None and criteria.max_distance_km > 0:
+                dist = distance_data.get(pg.id)
+                if dist is None or dist > criteria.max_distance_km or pg.latitude is None or pg.longitude is None:
+                    continue
             valid_pgs.append(pg)
 
         if valid_pgs:
             lines = [
-                f"### Verified PG Recommendations for: '{user_query}'\n",
-                "*(Corrected via SmartStay Validation Engine)*\n"
+                f"### Verified PG Recommendations for: \"{user_query}\"\n",
+                "*(Corrected via SmartStay Evidence Verification Engine)*\n"
             ]
             for idx, p in enumerate(valid_pgs, 1):
+                dist_val = distance_data.get(p.id)
+                dist_str = f"{dist_val:.2f} km (straight-line distance)" if dist_val is not None else "Coordinates verified in area"
                 lines.append(
                     f"{idx}. **{p.name}** ({p.area})\n"
-                    f"   - **Monthly Rent**: ₹{p.monthly_rent:,.0f}\n"
-                    f"   - **Room Type**: {p.room_type} | **Type**: {p.gender.capitalize()}\n"
-                    f"   - **Amenities**: {', '.join(p.amenities)}\n"
-                    f"   - **Rating**: {p.rating if p.rating else 'Unrated'}/5.0\n"
-                    f"   - **Contact**: {p.contact_number or 'Inquire at desk'}\n"
+                    f"   - **Monthly Rent**: ₹{p.monthly_rent:,.0f}/month\n"
+                    f"   - **Room Type**: {p.room_type.capitalize()} | **Gender**: {p.gender.capitalize()}\n"
+                    f"   - **Proximity**: {dist_str}\n"
+                    f"   - **Verified Amenities**: {', '.join(p.amenities)}\n"
+                    f"   - **Resident Rating**: {p.rating if p.rating else 'Unrated'}/5.0\n"
+                    f"   - **Contact**: {p.contact_number or 'Inquire at reception'}\n"
                 )
             corrected_text = "\n".join(lines)
         else:
             corrected_text = (
-                f"I reviewed our verified database for your request ('{user_query}'), "
-                "but none of the listings could satisfy all your requirements (budget, gender restriction, or mandatory amenities). "
-                "Please consider slightly increasing your budget or expanding your target area."
+                f"No PG accommodations in our verified database could satisfy all your requirements for request: ('{user_query}'). "
+                "None of the candidate listings met all constraints (budget cap, gender restriction, mandatory amenities, or distance). "
+                "Please consider slightly increasing your budget or expanding your target neighborhood."
             )
 
         return ReflectionResult(

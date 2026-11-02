@@ -44,6 +44,24 @@ def rank_pgs(
                         "reason": f"Distance {dist_km} km exceeds limit of {max_distance_km} km"
                     })
                     continue
+            else:
+                # Missing coordinates when max_distance_km is strictly specified
+                if max_distance_km is not None:
+                    excluded_by_distance.append({
+                        "id": pg.id,
+                        "name": pg.name,
+                        "distance_km": None,
+                        "reason": f"Distance unverified: missing GPS coordinates for '{pg.name}'; cannot confirm strict limit of {max_distance_km} km"
+                    })
+                    continue
+        elif max_distance_km is not None:
+            excluded_by_distance.append({
+                "id": pg.id,
+                "name": pg.name,
+                "distance_km": None,
+                "reason": f"Destination coordinates unavailable; cannot confirm strict limit of {max_distance_km} km"
+            })
+            continue
 
         scored_item = ScoringService.calculate_score(
             pg=pg,

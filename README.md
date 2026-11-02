@@ -84,12 +84,12 @@ sequenceDiagram
 
 $$\text{Final Score} = \text{Budget Score (30)} + \text{Proximity Score (30)} + \text{Amenity Score (25)} + \text{Rating Score (15)}$$
 
-| Factor | Weight | Scoring Formula | Rationale |
+| Factor | Weight | Scoring Formula in Code (`scoring_service.py`) | Rationale |
 | :--- | :---: | :--- | :--- |
-| **Budget Savings** | **30 pts** | $30 \times (1 - \frac{\text{Rent}}{\text{Max Budget}})$ | Rewards cost savings below budget cap. |
-| **Proximity** | **30 pts** | 30 pts if $d \le 1$ km; linear decay to 0 at 5 km | Minimizes daily walking and commute distance. |
-| **Amenities** | **25 pts** | $25 \times \frac{\text{Matched Amenities}}{\text{Requested Amenities}}$ | Verifies required facilities (Wi-Fi, Food, AC, etc.). |
-| **User Rating** | **15 pts** | $15 \times \frac{\text{Rating}}{5.0}$ | Grounded in verified resident review scores. |
+| **Budget Savings** | **30 pts** | $20.0 + \min\left(\frac{\text{Budget} - \text{Rent}}{\text{Budget}} \times 10, 10\right)$ (if rent $\le$ budget; 0 if rent > budget) | Grants 20 pt baseline for meeting budget cap, plus up to 10 bonus points for savings. |
+| **Proximity** | **30 pts** | $\le 1\text{ km}: 30\text{ pts}$; $1\text{–}2\text{ km}: 25\text{ pts}$; $2\text{–}3\text{ km}: 20\text{ pts}$; $3\text{–}5\text{ km}: 12\text{ pts}$; $> 5\text{ km}$: decay | Prioritizes walkable accommodations close to college/office. Unknown coordinates are marked unverified and excluded under strict distance limits. |
+| **Amenities** | **25 pts** | $25 \times \frac{\text{Matched Requested Amenities}}{\text{Total Requested Amenities}}$ | Proportional reward for each requested facility (Wi-Fi, Food, AC, etc.). |
+| **User Rating** | **15 pts** | $15 \times \frac{\text{Rating}}{5.0}$ (unrated defaults to neutral 10 pts) | Grounded in verified resident review scores. |
 
 ---
 
@@ -99,26 +99,27 @@ $$\text{Final Score} = \text{Budget Score (30)} + \text{Proximity Score (30)} + 
 SmartStay-AI-PG-Finder/
 ├── agent.py                    # CLI entrypoint with transcript recording
 ├── app.py                      # Interactive Streamlit Web Application
-├── config.py                   # Central settings (models, paths, weights)
+├── config.py                   # Central settings (models, paths, weights, timeouts)
 ├── requirements.txt            # Python dependencies
 ├── pytest.ini                  # Pytest configuration
 │
 ├── agents/
-│   ├── smartstay_agent.py      # Core ReAct agent with dynamic MCP discovery
-│   └── reflection_agent.py     # One-shot reflection & hallucination auditor
+│   ├── smartstay_agent.py      # Core ReAct agent with dynamic MCP ClientSession discovery
+│   └── reflection_agent.py     # One-shot reflection & factual claim auditor
 │
 ├── mcp_servers/
 │   ├── __init__.py             # Clean package exports
 │   ├── pg_server.py            # Custom accommodation FastMCP server (stdio)
+│   ├── pg_client.py            # Official Python MCP client connecting to pg_server.py
 │   ├── location_client.py      # Official Python MCP client connecting to osm-mcp
 │   └── server_config.json      # Dual-server configuration
 │
 ├── tools/                      # Search, budget, amenity, distance & ranker tools
 ├── database/                   # Verified PG data (pg_data.json) & locations catalog
-├── services/                   # Validation service & 0-100 scoring engine
+├── services/                   # Validation service (factual claim audit) & 0-100 scoring engine
 ├── models/                     # Pydantic schemas (Listings, Validation, Reflection)
 ├── prompts/                    # ReAct agent & reflection auditor prompts
-├── tests/                      # 34 automated unit, edge-case & MCP tests
+├── tests/                      # Automated unit, edge-case, regression & MCP tests
 ├── docs/                       # Architecture, testing & viva preparation guides
 └── evidence/                   # Recorded CLI demonstration transcripts
 ```

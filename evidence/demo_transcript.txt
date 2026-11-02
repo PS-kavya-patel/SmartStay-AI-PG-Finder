@@ -146,3 +146,57 @@ Final Answer:
 "No PG accommodations found satisfying all criteria (budget <= ₹1,000). Please consider increasing your budget or expanding your target area."
 Result: Zero hallucination, safe early stopping.
 ================================================================================
+
+================================================================================
+USER QUERY: Find a girls' PG in Ahmedabad under ₹8,000 per month, within 3 km of CEPT University, with Wi-Fi and food.
+================================================================================
+DISCOVERED TOOLS: 18
+OBSERVATIONS: 5
+VALIDATION: PASSED
+REFLECTION CRITIQUE: Deterministic correction applied due to 0 validation errors.
+
+FINAL RESPONSE:
+### Verified PG Recommendations for: "Find a girls' PG in Ahmedabad under ₹8,000 per month, within 3 km of CEPT University, with Wi-Fi and food."
+
+*(Corrected via SmartStay Evidence Verification Engine)*
+
+1. **Shree Shanti Girls PG** (Navrangpura)
+   - **Monthly Rent**: ₹7,500/month
+   - **Room Type**: Double-sharing | **Gender**: Girls
+   - **Proximity**: 0.35 km (straight-line distance)
+   - **Verified Amenities**: Wi-Fi, Food, AC, Laundry, Housekeeping, CCTV
+   - **Resident Rating**: 4.6/5.0
+   - **Contact**: +91 98250 11221
+
+2. **Saraswati Bhavan Girls Hostel & PG** (Navrangpura)
+   - **Monthly Rent**: ₹6,800/month
+   - **Room Type**: Triple-sharing | **Gender**: Girls
+   - **Proximity**: 0.27 km (straight-line distance)
+   - **Verified Amenities**: Wi-Fi, Food, Housekeeping, Power Backup, CCTV
+   - **Resident Rating**: 4.3/5.0
+   - **Contact**: +91 98250 33442
+
+3. **Kalyan Heritage Girls PG** (Vastrapur)
+   - **Monthly Rent**: ₹8,000/month
+   - **Room Type**: Double-sharing | **Gender**: Girls
+   - **Proximity**: 1.83 km (straight-line distance)
+   - **Verified Amenities**: Wi-Fi, Food, AC, Laundry, Refrigerator, Power Backup
+   - **Resident Rating**: 4.7/5.0
+   - **Contact**: +91 98250 55663
+
+4. **Zenith Comfort Girls Living** (Navrangpura)
+   - **Monthly Rent**: ₹7,800/month
+   - **Room Type**: Double-sharing | **Gender**: Girls
+   - **Proximity**: 0.20 km (straight-line distance)
+   - **Verified Amenities**: Wi-Fi, Food, Laundry, CCTV, Housekeeping
+   - **Resident Rating**: 4.4/5.0
+   - **Contact**: +91 98250 77884
+
+5. **Paramount Girls Residency** (Navrangpura)
+   - **Monthly Rent**: ₹7,400/month
+   - **Room Type**: Double-sharing | **Gender**: Girls
+   - **Proximity**: 0.21 km (straight-line distance)
+   - **Verified Amenities**: Wi-Fi, Food, AC, Housekeeping, Power Backup
+   - **Resident Rating**: 4.5/5.0
+   - **Contact**: +91 98250 45673
+
