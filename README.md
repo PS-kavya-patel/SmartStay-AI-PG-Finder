@@ -30,19 +30,7 @@
 
 ---
 
-## 🛡️ Resolution of Level 2 Reviewer Blockers
 
-This codebase includes complete remediations for all five Level 2 practitioner approval blockers:
-
-| # | Blocker | Problem Description | Production Remediation | Verification Status |
-| :---: | :--- | :--- | :--- | :---: |
-| **1** | **MCP Integration** | Agent called local Python functions directly, bypassing MCP server | Added `mcp_servers/pg_client.py` using official MCP SDK `ClientSession` over `stdio`; agent executes all PG operations via `pg_client.call_tool()` | ✅ **Verified** (`test_mcp_tools.py`) |
-| **2** | **Factual Verification** | False claims (e.g. ₹1 rent, invented pool) passed validation | Added sentence-level claim extraction in `services/validation_service.py`; reflection auditor hard-gated from overriding deterministic errors | ✅ **Verified** (`test_validation.py`) |
-| **3** | **Grounded Final Prose** | Excluded listings remained in final text; `success=True` on errors | Rebuilt `_build_grounded_response()` to emit only verified listings; text leakage check rejects excluded IDs; `success` tracks validation | ✅ **Verified** (`test_agent.py`) |
-| **4** | **Natural Language Parser** | "8k" parsed as ₹8; "within 3 km" set budget to 3; "ac" matched "accommodation" | Multiplier regex for `k`/`thousand`; separated distance units (`km`); word boundary `\bac\b`; removed automatic LD College fallback | ✅ **Verified** (`test_agent.py`) |
-| **5** | **Missing GPS Coordinates** | Missing GPS coordinates passed strict distance checks | Listings with missing GPS (`pg_ahm_012`) are excluded from ranking when distance limits are specified; flagged unverified otherwise | ✅ **Verified** (`test_scoring.py`) |
-
----
 
 ## 🏗️ System Architecture
 
